@@ -1,0 +1,140 @@
+name: ops-leadtime-metrics
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  ops-leadtime-metrics:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Calculate Lead Time and Send to Notion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.METRICS_TO_NOTION_NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.LEADTIME_METRICS_TO_NOTION_NOTION_DATABASE_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASED_AT: ${{ github.event.release.published_at }}
+        run: |
+          echo "Current Release Tag: $RELEASE_TAG"
+
+          # ---------------------------------------------------------
+          # 1. Identify the tag range for comparison
+          # ---------------------------------------------------------
+          # Find the tag immediately preceding the current HEAD (^)
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            # If no previous tag exists, consider the range from the first commit to HEAD
+            COMMIT_RANGE="HEAD"
+            echo "Target Range: Initial -> HEAD"
+          else
+            COMMIT_RANGE="$PREV_TAG..HEAD"
+            echo "Target Range: $PREV_TAG -> HEAD"
+          fi
+
+          # ---------------------------------------------------------
+          # 2. Fast extraction of PR numbers from commit logs
+          # ---------------------------------------------------------
+          # Instead of calling the API for every commit, we extract PR numbers 
+          # (e.g., "#123") directly from commit messages.
+          # This significantly reduces API calls and speeds up execution.
+          
+          echo "Extracting PR numbers from commit logs..."
+          
+          # grep -oE: Extract only the matching part (#[0-9]+)
+          # tr -d '#': Remove the '#' symbol to get raw numbers
+          # sort -u -n: Sort numerically and remove duplicates
+          PR_NUMBERS=$(git log "$COMMIT_RANGE" --pretty=format:"%s" | grep -oE '#[0-9]+' | tr -d '#' | sort -u -n)
+
+          if [ -z "$PR_NUMBERS" ]; then
+            echo "No PR numbers found in commit messages."
+            exit 0
+          fi
+
+          echo "Target PRs: $(echo $PR_NUMBERS | tr '\n' ' ')"
+
+          # ---------------------------------------------------------
+          # 3. Fetch details per PR and send to Notion
+          # ---------------------------------------------------------
+          for PR_NUM in $PR_NUMBERS; do
+            
+            # Fetch PR details using GitHub CLI
+            # "|| true" ensures the script continues even if an ID is an Issue, not a PR
+            PR_JSON=$(gh pr view "$PR_NUM" \
+              --json number,title,createdAt,url,author,state \
+              2>/dev/null || true)
+
+            # Skip if JSON is empty
+            if [ -z "$PR_JSON" ]; then continue; fi
+            
+            # Skip if the PR is not in MERGED state (e.g., closed without merge, or it was an Issue)
+            PR_STATE=$(echo "$PR_JSON" | jq -r '.state')
+            if [ "$PR_STATE" != "MERGED" ]; then
+               echo "Skipping #$PR_NUM (Status: $PR_STATE)"
+               continue
+            fi
+
+            # Extract data
+            PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
+            PR_CREATED_AT=$(echo "$PR_JSON" | jq -r '.createdAt')
+            PR_URL=$(echo "$PR_JSON" | jq -r '.url')
+            PR_AUTHOR=$(echo "$PR_JSON" | jq -r '.author.login')
+
+            echo "Processing PR #$PR_NUM: $PR_TITLE"
+
+            # Calculate Lead Time (Seconds and Hours)
+            START_SEC=$(date -d "$PR_CREATED_AT" +%s)
+            END_SEC=$(date -d "$RELEASED_AT" +%s)
+            DURATION_SEC=$((END_SEC - START_SEC))
+            # Calculate hours with 2 decimal places using bc
+            DURATION_HOURS=$(echo "scale=2; $DURATION_SEC / 3600" | bc)
+
+            # Build JSON Payload for Notion
+            # Note: jq handles escaping of special characters in titles automatically
+            JSON_PAYLOAD=$(jq -n \
+              --arg db_id "$NOTION_DB_ID" \
+              --arg title "$PR_TITLE" \
+              --arg tag "$RELEASE_TAG" \
+              --arg author "$PR_AUTHOR" \
+              --arg pr_url "$PR_URL" \
+              --arg pr_date "$PR_CREATED_AT" \
+              --arg rel_date "$RELEASED_AT" \
+              --argjson hours "$DURATION_HOURS" \
+              --argjson pr_num "$PR_NUM" \
+              '{
+                parent: { database_id: $db_id },
+                properties: {
+                  "Name": { title: [{ text: { content: $title } }] },
+                  "Release Tag": { select: { name: $tag } },
+                  "Lead Time (Hours)": { number: $hours },
+                  "PR Created At": { date: { start: $pr_date } },
+                  "Released At": { date: { start: $rel_date } },
+                  "PR Number": { number: $pr_num },
+                  "Author": { select: { name: $author } },
+                  "PR URL": { url: $pr_url }
+                }
+              }')
+
+            # Send to Notion API
+            # Removed "> /dev/null" to allow error logs to be visible if the request fails
+            curl -s -X POST "https://api.notion.com/v1/pages" \
+              -H "Authorization: Bearer $NOTION_TOKEN" \
+              -H "Content-Type: application/json" \
+              -H "Notion-Version: 2022-06-28" \
+              --data "$JSON_PAYLOAD"
+
+            echo " - Sent PR #$PR_NUM to Notion."
+            
+            # Rate limiting for Notion API
+            sleep 1
+          done
+
