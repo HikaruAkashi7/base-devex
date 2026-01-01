@@ -1,0 +1,42 @@
+{
+  // --- 全体の基本設定 ---
+  "editor.formatOnSave": true,
+
+  // --- JavaScript / TypeScript / YAML / JSON など ---
+  // これらは前回の設定通り、Prettierが担当します
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+
+  // --- [Go] 言語設定 ---
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true // importの順序整理などを自動でやる
+    }
+  },
+
+  // --- [Python] 言語設定 ---
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter" // Blackを使う
+    // もしimports整理もしたい場合は isort拡張機能を入れて以下を有効化
+    // "editor.codeActionsOnSave": {
+    //   "source.organizeImports": true
+    // }
+  },
+
+  // --- [Shell Script] 言語設定 ---
+  "[shellscript]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format", // shell-formatを使う
+    "files.eol": "\n" // シェルは改行コードがLFじゃないと動かないことが多いので強制
+  },
+  
+  // --- [Docker / Ignore系] ---
+  "[dockerfile]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  "[ignore]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  }
+}

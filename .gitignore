@@ -8,7 +8,6 @@ ehthumbs.db
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -21,3 +20,5 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Node
+node_modules
