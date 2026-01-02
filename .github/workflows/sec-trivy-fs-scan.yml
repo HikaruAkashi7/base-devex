@@ -1,0 +1,43 @@
+# ==============================================================================
+# WORKFLOW: SEC Trivy Scan
+#
+# DESCRIPTION:
+#   Scans the repository file system for vulnerabilities and misconfigurations
+#   using Aqua Security's Trivy.
+#
+# PREREQUISITES:
+#   None. Uses standard GitHub Token for API rate limits.
+# ==============================================================================
+
+name: sec-trivy-scan
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  trivy-fs-scan:
+    name: Trivy File System Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
