@@ -1,5 +1,5 @@
 # ==============================================================================
-# WORKFLOW: OPS Lead Time Metrics
+# WORKFLOW: OPS Lead Time For Changes Metrics
 #
 # DESCRIPTION:
 #   Calculates "Lead Time for Changes" (Time from PR creation to Release).
@@ -26,7 +26,7 @@
 #   It works best with "Squash & Merge" or standard Merge Commits.
 # ==============================================================================
 
-name: ops-leadtime-metrics
+name: ops-lead-time-for-changes-metrics
 
 on:
   release:
