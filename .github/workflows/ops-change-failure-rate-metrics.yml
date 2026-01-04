@@ -1,0 +1,135 @@
+# ==============================================================================
+# WORKFLOW: OPS Change Failure Rate Metrics
+#
+# DESCRIPTION:
+#   Calculates "Change Failure Rate" (CFR).
+#   Triggered when a Release is published. It scans all PRs in the release
+#   to determine if the deployment was a "Failure" (remediation/hotfix).
+#
+# PREREQUISITES:
+#   1. Repository Secrets:
+#      - METRICS_TO_NOTION_NOTION_TOKEN: Notion Integration Token
+#      - CFR_METRICS_TO_NOTION_NOTION_DATABASE_ID: Target Database ID
+#
+#   2. Notion Database Schema (Case Sensitive):
+#      - Name              [Title]    : Release Tag (e.g., v1.0.0)
+#      - Is Failure        [Checkbox] : True if the release includes bug/hotfix
+#      - Change Type       [Select]   : Regular Release / Hotfix Release
+#      - PR Count          [Number]   : Total number of PRs in this release
+#      - Released At       [Date]     : When the Release was published
+#      - URL               [URL]      : Link to the Release
+# ==============================================================================
+
+name: ops-change-failure-rate-metrics
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  ops-cfr-metrics:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Analyze Release and Send to Notion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.METRICS_TO_NOTION_NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.CFR_METRICS_TO_NOTION_NOTION_DATABASE_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASED_AT: ${{ github.event.release.published_at }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          echo "Analyzing Release: $RELEASE_TAG"
+
+          # ---------------------------------------------------------
+          # 1. Identify the tag range for comparison
+          # ---------------------------------------------------------
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            COMMIT_RANGE="HEAD"
+          else
+            COMMIT_RANGE="$PREV_TAG..HEAD"
+          fi
+
+          # ---------------------------------------------------------
+          # 2. Extract PR numbers from commit logs
+          # ---------------------------------------------------------
+          PR_NUMBERS=$(git log "$COMMIT_RANGE" --pretty=format:"%s" | grep -oE '#[0-9]+' | tr -d '#' | sort -u -n)
+
+          if [ -z "$PR_NUMBERS" ]; then
+            echo "No PR numbers found. Skipping metrics collection."
+            exit 0
+          fi
+
+          # ---------------------------------------------------------
+          # 3. Scan PRs for 'bug' or 'hotfix' labels
+          # ---------------------------------------------------------
+          IS_FAILURE="false"
+          TOTAL_PR_COUNT=0
+
+          for PR_NUM in $PR_NUMBERS; do
+            # Fetch PR labels using GitHub CLI
+            PR_JSON=$(gh pr view "$PR_NUM" --json labels,state 2>/dev/null || true)
+            
+            if [ -z "$PR_JSON" ]; then continue; fi
+            
+            # Only count merged PRs
+            if [ "$(echo "$PR_JSON" | jq -r '.state')" != "MERGED" ]; then continue; fi
+            
+            ((TOTAL_PR_COUNT++))
+
+            # Check for failure-related labels
+            HAS_FAIL_LABEL=$(echo "$PR_JSON" | jq -r '.labels[].name' | grep -E "bug|hotfix" || true)
+            if [ -n "$HAS_FAIL_LABEL" ]; then
+              IS_FAILURE="true"
+              echo " - PR #$PR_NUM identified as failure-related (bug/hotfix)."
+            fi
+          done
+
+          # Determine Change Type for Notion Select property
+          if [ "$IS_FAILURE" = "true" ]; then
+            CHANGE_TYPE="Hotfix Release"
+          else
+            CHANGE_TYPE="Regular Release"
+          fi
+
+          echo "Final Result for $RELEASE_TAG: Is Failure = $IS_FAILURE, Total PRs = $TOTAL_PR_COUNT"
+
+          # ---------------------------------------------------------
+          # 4. Build JSON Payload and Send to Notion
+          # ---------------------------------------------------------
+          JSON_PAYLOAD=$(jq -n \
+            --arg db_id "$NOTION_DB_ID" \
+            --arg tag "$RELEASE_TAG" \
+            --arg type "$CHANGE_TYPE" \
+            --arg rel_date "$RELEASED_AT" \
+            --arg url "$RELEASE_URL" \
+            --argjson is_fail "$IS_FAILURE" \
+            --argjson pr_count "$TOTAL_PR_COUNT" \
+            '{
+              parent: { database_id: $db_id },
+              properties: {
+                "Name": { title: [{ text: { content: $tag } }] },
+                "Is Failure": { checkbox: $is_fail },
+                "Change Type": { select: { name: $type } },
+                "PR Count": { number: $pr_count },
+                "Released At": { date: { start: $rel_date } },
+                "URL": { url: $url }
+              }
+            }')
+
+          curl -s -X POST "https://api.notion.com/v1/pages" \
+            -H "Authorization: Bearer $NOTION_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "Notion-Version: 2022-06-28" \
+            --data "$JSON_PAYLOAD"
+
+          echo "Metrics for $RELEASE_TAG sent to Notion."
