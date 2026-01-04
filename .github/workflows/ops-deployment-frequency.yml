@@ -1,5 +1,5 @@
 # ==============================================================================
-# WORKFLOW: OPS Workflow Metrics
+# WORKFLOW: OPS Deployment Frequency Metrics
 #
 # DESCRIPTION:
 #   Calculates duration and metadata for every completed workflow run
@@ -22,7 +22,7 @@
 #      - URL             [URL]    : Link to the run
 # ==============================================================================
 
-name: ops-workflow-metrics
+name: ops-deployment-frequency
 
 on:
   workflow_run:
@@ -30,7 +30,7 @@ on:
     types: [completed]
 
 jobs:
-  ops-workflow-metrics:
+  ops-deployment-frequency:
     runs-on: ubuntu-latest
     permissions:
       contents: read
