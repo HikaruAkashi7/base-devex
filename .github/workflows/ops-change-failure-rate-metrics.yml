@@ -130,6 +130,7 @@ jobs:
             -H "Authorization: Bearer $NOTION_TOKEN" \
             -H "Content-Type: application/json" \
             -H "Notion-Version: 2022-06-28" \
-            --data "$JSON_PAYLOAD"
+            --data "$JSON_PAYLOAD" \
+            --fail
 
           echo " - Sent Release $RELEASE_TAG metrics to Notion."
