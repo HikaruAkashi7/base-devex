@@ -23,8 +23,10 @@
 name: ops-change-failure-rate
 
 on:
-  release:
-    types: [published]
+#   release:
+#     types: [published]
+  workflow_dispatch:
+
 
 jobs:
   ops-cfr-metrics:

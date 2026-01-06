@@ -29,8 +29,10 @@
 name: ops-lead-time-for-changes-metrics
 
 on:
-  release:
-    types: [published]
+  # release:
+  #   types: [published]
+  workflow_dispatch:
+
 
 jobs:
   ops-leadtime-metrics:

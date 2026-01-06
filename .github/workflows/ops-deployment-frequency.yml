@@ -25,9 +25,11 @@
 name: ops-deployment-frequency
 
 on:
-  workflow_run:
-    workflows: ["*"]
-    types: [completed]
+  # workflow_run:
+  #   workflows: ["*"]
+  #   types: [completed]
+  workflow_dispatch:
+
 
 jobs:
   ops-deployment-frequency:
