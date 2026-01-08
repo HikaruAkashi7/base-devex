@@ -58,7 +58,7 @@
 * **Objective:** Visualizes the relationship between the number of Pull Requests included in a single release and the likelihood of failure.
 * **Insight:** Identifies the team's "Safety Limit" for deployment size. By showing that releases with larger batch sizes have a higher probability of requiring hotfixes, this dashboard provides data-driven justification for moving toward smaller, more frequent, and lower-risk deployments.
 
-### (wip)Time to restore service (TTRS)
+### Time to restore service (TTRS)
 **Definition:** The time it takes to recover from a failure in production.
 
 0. Performance indicators:
