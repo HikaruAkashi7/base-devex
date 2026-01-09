@@ -1,0 +1,165 @@
+# ==============================================================================
+# WORKFLOW: SEC Trivy Vulnerability Scan (Civer)
+#
+# DESCRIPTION:
+#   Scans the repository file system for vulnerabilities using Aqua Trivy.
+#   It aggregates Critical and High severity issues and sends a summary report
+#   with detailed vulnerability information to Civer.
+#   If any Critical vulnerabilities are found, the workflow fails.
+#   High vulnerabilities will be reported but will not fail the workflow.
+# ==============================================================================
+
+name: sec-trivy-scan-civer
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  trivy-fs-scan:
+    name: Trivy File System Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'json'
+          output: 'trivy-results.json'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Parse Results and Send to Civer
+        env:
+          CIVER_API_URL: ${{ secrets.CIVER_API_URL }}
+          CIVER_API_KEY: ${{ secrets.CIVER_API_KEY }}
+          REPO_NAME: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          TRIVY_FILE='trivy-results.json'
+
+          # ---------------------------------------------------------
+          # 1. Load JSON and aggregate results
+          # ---------------------------------------------------------
+          if [ ! -f "$TRIVY_FILE" ]; then
+            echo "Error: Trivy result file not found."
+            exit 1
+          fi
+
+          CRITICAL_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' "$TRIVY_FILE" || echo "0")
+          HIGH_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' "$TRIVY_FILE" || echo "0")
+
+          echo "Summary: Critical=${CRITICAL_COUNT}, High=${HIGH_COUNT}"
+
+          # ---------------------------------------------------------
+          # 2. Extract vulnerability details
+          # ---------------------------------------------------------
+          VULNERABILITIES=$(jq -c '
+            [.Results[]? | 
+              select(.Vulnerabilities != null and (.Vulnerabilities | length) > 0) |
+              {
+                target: (.Target // "Unknown File"),
+                type: (.Type // "unknown"),
+                vulnerabilities: [
+                  .Vulnerabilities[] |
+                  {
+                    severity: (.Severity // ""),
+                    vulnerability_id: (.VulnerabilityID // ""),
+                    pkg_name: (.PkgName // "unknown"),
+                    installed_version: (.InstalledVersion // "unknown"),
+                    fixed_version: (.FixedVersion // "N/A"),
+                    title: (.Title // ""),
+                    description: (.Description // ""),
+                    primary_url: (.PrimaryURL // "")
+                  }
+                ]
+              }
+            ]
+          ' "$TRIVY_FILE" || echo "[]")
+
+          # ---------------------------------------------------------
+          # 3. Build payload data for Civer
+          # ---------------------------------------------------------
+          CURRENT_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            STATUS="failed"
+          else
+            STATUS="success"
+          fi
+          
+          JSON_PAYLOAD=$(jq -n \
+            --arg repo_name "$REPO_NAME" \
+            --arg run_id "$RUN_ID" \
+            --arg run_url "$RUN_URL" \
+            --arg branch "$BRANCH" \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg status "$STATUS" \
+            --arg date "$CURRENT_DATE" \
+            --argjson crit_count "$CRITICAL_COUNT" \
+            --argjson high_count "$HIGH_COUNT" \
+            --argjson vulnerabilities "$VULNERABILITIES" \
+            '{
+              repository: $repo_name,
+              run_id: $run_id,
+              run_url: $run_url,
+              branch: $branch,
+              commit_sha: $commit_sha,
+              status: $status,
+              timestamp: $date,
+              summary: {
+                critical_count: $crit_count,
+                high_count: $high_count,
+                total_count: ($crit_count + $high_count)
+              },
+              vulnerabilities: $vulnerabilities
+            }')
+
+          # ---------------------------------------------------------
+          # 4. Send to Civer API
+          # ---------------------------------------------------------
+          if [ -z "$CIVER_API_URL" ] || [ -z "$CIVER_API_KEY" ]; then
+            echo "Warning: CIVER_API_URL or CIVER_API_KEY not set. Skipping Civer report."
+            echo "Payload would be:"
+            echo "$JSON_PAYLOAD" | jq .
+          else
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CIVER_API_URL" \
+              -H "Authorization: Bearer $CIVER_API_KEY" \
+              -H "Content-Type: application/json" \
+              --data "$JSON_PAYLOAD")
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+
+            if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+              echo "Error sending to Civer: $HTTP_CODE - $BODY"
+              exit 1
+            fi
+
+            echo "Successfully sent report to Civer."
+          fi
+
+          # ---------------------------------------------------------
+          # 5. Fail CI if Critical vulnerabilities found
+          # ---------------------------------------------------------
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "::error::Critical Vulnerabilities found! Count=${CRITICAL_COUNT}"
+            exit 1
+          elif [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "::warning::High Vulnerabilities found (Count=${HIGH_COUNT}), but allowed per policy."
+          fi
+
