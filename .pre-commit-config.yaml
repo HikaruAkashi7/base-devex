@@ -1,0 +1,19 @@
+repos:
+  # 1. Basic file checks (lightweight and fast)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace        # Remove trailing whitespace
+      - id: end-of-file-fixer          # Ensure files end with a newline
+      - id: check-yaml                 # Check YAML syntax
+      - id: check-json                 # Check JSON syntax
+      - id: check-added-large-files    # Prevent committing large files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict       # Check for merge conflict markers
+
+  # 2. Security (secret detection)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+        name: Detect Hardcoded Secrets
