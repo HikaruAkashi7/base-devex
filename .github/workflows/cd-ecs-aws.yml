@@ -1,0 +1,20 @@
+name: cd-ecs-aws
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/reusable-cd-ecs-aws.yml
+    with:
+      environment: sample
+      ecr_repository: sample
+      services: '["sample"]'
+      docker_build_args: |
+        BUILD_VERSION="${{ github.ref }}(${{ github.sha }})"
+    secrets: inherit
