@@ -22,3 +22,6 @@ Thumbs.db
 
 # Node
 node_modules
+.eslintrc.json
+package.json
+pnpm-lock.yaml
