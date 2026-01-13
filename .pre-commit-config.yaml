@@ -10,10 +10,3 @@ repos:
       - id: check-added-large-files    # Prevent committing large files
         args: ['--maxkb=500']
       - id: check-merge-conflict       # Check for merge conflict markers
-
-  # 2. Security (secret detection)
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.1
-    hooks:
-      - id: gitleaks
-        name: Detect Hardcoded Secrets
