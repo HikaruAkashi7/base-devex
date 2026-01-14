@@ -1,0 +1,18 @@
+name: sec-sast-scan
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sec-sast-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Run Semgrep SAST scan
+        run: semgrep scan --config=auto --error
