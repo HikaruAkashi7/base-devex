@@ -1,3 +1,32 @@
+# ==============================================================================
+# WORKFLOW: Security Container Scan
+#
+# DESCRIPTION:
+#   Performs container image security scanning using Trivy to detect
+#   vulnerabilities in Docker images. This workflow:
+#   1. Builds Docker images using Docker Buildx with GitHub Actions cache
+#   2. Scans the built images for OS-level vulnerabilities
+#   3. Reports critical vulnerabilities and fails if any are found
+#
+#   The workflow uses a matrix strategy to scan multiple container images
+#   in parallel, making it suitable for repositories with multiple Dockerfiles.
+#
+# PREREQUISITES:
+#   1. Dockerfile(s) must exist in the repository
+#   2. Repository must have appropriate permissions for security-events
+#
+# CONFIGURATION:
+#   Modify the matrix strategy to add more container images:
+#   - dockerfile: Path to Dockerfile
+#   - context: Docker build context
+#   - image: Image name for tagging
+#
+# SCAN SETTINGS:
+#   - vuln-type: 'os' (OS-level vulnerabilities)
+#   - severity: 'CRITICAL' (only critical vulnerabilities fail the workflow)
+#   - ignore-unfixed: true (ignores vulnerabilities without fixes)
+# ==============================================================================
+
 name: sec-container-scan
 
 on:

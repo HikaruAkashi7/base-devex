@@ -1,3 +1,25 @@
+# ==============================================================================
+# WORKFLOW: Security SAST Scan
+#
+# DESCRIPTION:
+#   Performs Static Application Security Testing (SAST) using Semgrep to
+#   detect security vulnerabilities, bugs, and code quality issues in
+#   the source code. This workflow:
+#   1. Runs Semgrep with auto-configuration to detect common security issues
+#   2. Fails the workflow if any security findings are detected
+#
+#   Semgrep uses a container-based approach and automatically detects
+#   programming languages and applies relevant security rules.
+#
+# PREREQUISITES:
+#   1. Repository must have source code to scan
+#   2. Repository must have appropriate permissions for security-events
+#
+# SCAN SETTINGS:
+#   - config: 'auto' (automatically detects languages and applies rules)
+#   - error: Fails the workflow if any findings are detected
+# ==============================================================================
+
 name: sec-sast-scan
 
 on:

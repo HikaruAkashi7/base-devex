@@ -1,3 +1,27 @@
+# ==============================================================================
+# WORKFLOW: Security SCA Scan
+#
+# DESCRIPTION:
+#   Performs Software Composition Analysis (SCA) using Trivy to detect
+#   vulnerabilities in project dependencies and package files. This workflow:
+#   1. Scans the filesystem for dependency files (package.json, requirements.txt, etc.)
+#   2. Identifies known vulnerabilities in third-party dependencies
+#   3. Reports critical vulnerabilities and fails if any are found
+#
+#   Trivy automatically detects dependency files and scans them for known
+#   Common Vulnerabilities and Exposures (CVEs).
+#
+# PREREQUISITES:
+#   1. Repository must contain dependency files (package.json, requirements.txt, etc.)
+#   2. Repository must have appropriate permissions for security-events
+#
+# SCAN SETTINGS:
+#   - scan-type: 'fs' (filesystem scan)
+#   - scan-ref: '.' (scans the entire repository)
+#   - severity: 'CRITICAL' (only critical vulnerabilities fail the workflow)
+#   - ignore-unfixed: true (ignores vulnerabilities without fixes)
+# ==============================================================================
+
 name: sec-sca-scan
 
 on:
