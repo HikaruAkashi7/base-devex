@@ -12,6 +12,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.vscode/
 
 # Logs
 *.log
