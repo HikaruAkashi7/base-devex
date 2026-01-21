@@ -1,0 +1,103 @@
+# ==============================================================================
+# WORKFLOW: Security Scan (Caller)
+#
+# DESCRIPTION:
+#   This workflow calls reusable security scanning workflows to perform
+#   comprehensive security scans on specific directories:
+#   1. SCA (Software Composition Analysis) - Scans dependencies
+#   2. SAST (Static Application Security Testing) - Scans source code
+#   3. Container Scan - Scans Docker images (if Dockerfile exists)
+#
+#   This workflow demonstrates how to use reusable workflows to scan
+#   specific directories within a repository.
+#
+# PREREQUISITES:
+#   1. Repository must have appropriate permissions for security-events
+#   2. Reusable workflows must exist:
+#      - reusable-sec-sca-scan.yml
+#      - reusable-sec-sast-scan.yml
+#      - reusable-sec-container-scan.yml
+#
+# CONFIGURATION:
+#   Modify the scan-path values to target specific directories:
+#   - documents: Scans the documents directory
+#   - Other paths: Add additional directories as needed
+#
+# USAGE:
+#   This workflow can be triggered manually via workflow_dispatch or
+#   automatically on push/pull_request events.
+# ==============================================================================
+
+name: security-scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      scan_documents:
+        description: 'Scan documents directory'
+        required: false
+        type: boolean
+        default: true
+      scan_root:
+        description: 'Scan root directory'
+        required: false
+        type: boolean
+        default: false
+      scan_container:
+        description: 'Scan container images'
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  sca-scan-documents:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.scan_documents || github.event_name != 'workflow_dispatch' }}
+    uses: ./.github/workflows/reusable-sec-sca-scan.yml
+    with:
+      scan-path: ./documents
+      severity: CRITICAL
+      ignore-unfixed: true
+
+  sast-scan-documents:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.scan_documents || github.event_name != 'workflow_dispatch' }}
+    uses: ./.github/workflows/reusable-sec-sast-scan.yml
+    with:
+      scan-path: ./documents
+      config: auto
+      fail-on-error: true
+
+  sca-scan-root:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.scan_root || github.event_name != 'workflow_dispatch' }}
+    uses: ./.github/workflows/reusable-sec-sca-scan.yml
+    with:
+      scan-path: .
+      severity: CRITICAL
+      ignore-unfixed: true
+
+  sast-scan-root:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.scan_root || github.event_name != 'workflow_dispatch' }}
+    uses: ./.github/workflows/reusable-sec-sast-scan.yml
+    with:
+      scan-path: .
+      config: auto
+      fail-on-error: true
+
+  container-scan:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.scan_container || (github.event_name != 'workflow_dispatch' && github.event_name == 'push') }}
+    uses: ./.github/workflows/reusable-sec-container-scan.yml
+    with:
+      dockerfile: Dockerfile
+      context: .
+      image: sample-app
+      vuln-type: os
+      severity: CRITICAL
+      ignore-unfixed: true
+
