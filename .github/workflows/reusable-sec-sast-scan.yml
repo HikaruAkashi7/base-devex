@@ -1,0 +1,66 @@
+# ==============================================================================
+# WORKFLOW: Reusable Security SAST Scan
+#
+# DESCRIPTION:
+#   Reusable workflow for performing Static Application Security Testing (SAST)
+#   using Semgrep to detect security vulnerabilities, bugs, and code quality
+#   issues in the source code. This workflow:
+#   1. Runs Semgrep with auto-configuration to detect common security issues
+#   2. Fails the workflow if any security findings are detected
+#
+#   Semgrep uses a container-based approach and automatically detects
+#   programming languages and applies relevant security rules.
+#
+# PREREQUISITES:
+#   1. Repository must have source code to scan
+#   2. Repository must have appropriate permissions for security-events
+#
+# INPUTS:
+#   - scan-path: Directory path to scan (default: .)
+#   - config: Semgrep configuration (default: auto)
+#   - fail-on-error: Fail workflow if findings detected (default: true)
+#
+# SCAN SETTINGS:
+#   - config: 'auto' (automatically detects languages and applies rules)
+#   - error: Fails the workflow if any findings are detected
+# ==============================================================================
+
+name: reusable-sec-sast-scan
+
+on:
+  workflow_call:
+    inputs:
+      scan-path:
+        description: Directory path to scan
+        required: false
+        type: string
+        default: .
+      config:
+        description: Semgrep configuration
+        required: false
+        type: string
+        default: auto
+      fail-on-error:
+        description: Fail workflow if findings detected
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  sec-sast-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Run Semgrep SAST scan
+        run: |
+          if [ "${{ inputs.fail-on-error }}" = "true" ]; then
+            semgrep scan --config=${{ inputs.config }} --error ${{ inputs.scan-path }}
+          else
+            semgrep scan --config=${{ inputs.config }} ${{ inputs.scan-path }}
+          fi

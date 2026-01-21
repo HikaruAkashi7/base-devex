@@ -1,0 +1,97 @@
+# ==============================================================================
+# WORKFLOW: Reusable Security Container Scan
+#
+# DESCRIPTION:
+#   Reusable workflow for performing container image security scanning using
+#   Trivy to detect vulnerabilities in Docker images. This workflow:
+#   1. Builds Docker images using Docker Buildx with GitHub Actions cache
+#   2. Scans the built images for OS-level vulnerabilities
+#   3. Reports critical vulnerabilities and fails if any are found
+#
+#   The workflow uses a matrix strategy to scan multiple container images
+#   in parallel, making it suitable for repositories with multiple Dockerfiles.
+#
+# PREREQUISITES:
+#   1. Dockerfile(s) must exist in the repository
+#   2. Repository must have appropriate permissions for security-events
+#
+# INPUTS:
+#   - dockerfile: Path to Dockerfile (required)
+#   - context: Docker build context (default: .)
+#   - image: Image name for tagging (required)
+#   - vuln-type: Vulnerability type to scan (default: os)
+#   - severity: Minimum severity level to fail (default: CRITICAL)
+#   - ignore-unfixed: Ignore unfixed vulnerabilities (default: true)
+#
+# SCAN SETTINGS:
+#   - vuln-type: 'os' (OS-level vulnerabilities)
+#   - severity: 'CRITICAL' (only critical vulnerabilities fail the workflow)
+#   - ignore-unfixed: true (ignores vulnerabilities without fixes)
+# ==============================================================================
+
+name: reusable-sec-container-scan
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        description: Path to Dockerfile
+        required: true
+        type: string
+      context:
+        description: Docker build context
+        required: false
+        type: string
+        default: .
+      image:
+        description: Image name for tagging
+        required: true
+        type: string
+      vuln-type:
+        description: Vulnerability type to scan
+        required: false
+        type: string
+        default: os
+      severity:
+        description: Minimum severity level to fail
+        required: false
+        type: string
+        default: CRITICAL
+      ignore-unfixed:
+        description: Ignore unfixed vulnerabilities
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  sec-container-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: false
+          tags: ${{ inputs.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+
+      - name: Run Trivy container scanner
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          image-ref: '${{ inputs.image }}:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: ${{ inputs.ignore-unfixed }}
+          vuln-type: ${{ inputs.vuln-type }}
+          severity: ${{ inputs.severity }}
