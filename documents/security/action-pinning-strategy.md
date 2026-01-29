@@ -43,3 +43,13 @@ steps:
 
 * Safety: This guarantees that only the code at this specific point in time is executed.
 * Tip: Since hash strings are hard to identify, adding the version number as a comment improves readability.
+
+## 4. Recommended: Use pinact run
+
+To pin action references in workflow files to commit hashes in bulk, **pinact** is recommended.
+
+* **pinact run**: Parses workflow files and automatically replaces tag or branch references with commit SHAs.
+* It eliminates the manual work of looking up and replacing hashes, reducing oversights and mistakes.
+* Running `pinact run` periodically helps automate updating and verifying pinned versions.
+
+See the [pinact](https://github.com/suzuki-shunsuke/pinact) documentation for installation and usage.
