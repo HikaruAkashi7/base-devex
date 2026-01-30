@@ -1,4 +1,4 @@
-# action-pinning-strategy
+# action-pinning-strategys
 
 ## 1. Version Tags vs. Commit Hashes
 
